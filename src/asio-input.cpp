@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <util/threading.h>
 #include <util/circlebuf.h>
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <vector>
 #include <list>
 #include <unordered_map>
@@ -31,8 +32,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sstream>
 #include <windows.h>
 #include <util/windows/WinHandle.hpp>
-#include <bassasio.h>
+#include "bassasio-loader.h"
+#include <QMainWindow>
+#include <QMessageBox>
 
+bool bassasio_loaded = false;
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("win-asio", "en-US")
 
@@ -1891,9 +1895,102 @@ obs_properties_t *asio_get_properties(void *unused)
 
 	return props;
 }
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4706)
+#endif
 
+bool load_bassasio(void)
+{
+	if (!load_lib()) {
+		blog(LOG_INFO,
+		     "[win-asio: asio disabled, bassasio.dll not found]");
+		return false;
+	} else {
+		blog(LOG_INFO, "[win-asio: asio enabled]");
+	}
+
+#define LOAD_SYM_FROM_LIB(sym, lib, dll)                           \
+	if (!(sym = (sym##_t)GetProcAddress(lib, #sym))) {         \
+		DWORD err = GetLastError();                        \
+		blog(LOG_ERROR,                                    \
+		     "[win-asio: Couldn't load " #sym " from " dll \
+		     ": %lu (0x%lx)]",                             \
+		     err, err);                                    \
+		goto unload_everything;                            \
+	}
+
+#define LOAD_SYM(sym) LOAD_SYM_FROM_LIB(sym, bassasio, "bassasio.dll")
+	LOAD_SYM(BASS_ASIO_GetVersion);
+	LOAD_SYM(BASS_ASIO_SetUnicode);
+	LOAD_SYM(BASS_ASIO_ErrorGetCode);
+	LOAD_SYM(BASS_ASIO_GetDeviceInfo);
+	LOAD_SYM(BASS_ASIO_AddDevice);
+	LOAD_SYM(BASS_ASIO_SetDevice);
+	LOAD_SYM(BASS_ASIO_GetDevice);
+	LOAD_SYM(BASS_ASIO_Init);
+	LOAD_SYM(BASS_ASIO_Free);
+	LOAD_SYM(BASS_ASIO_Lock);
+	LOAD_SYM(BASS_ASIO_SetNotify);
+	LOAD_SYM(BASS_ASIO_ControlPanel);
+	LOAD_SYM(BASS_ASIO_GetInfo);
+	LOAD_SYM(BASS_ASIO_CheckRate);
+	LOAD_SYM(BASS_ASIO_SetRate);
+	LOAD_SYM(BASS_ASIO_GetRate);
+	LOAD_SYM(BASS_ASIO_Start);
+	LOAD_SYM(BASS_ASIO_Stop);
+	LOAD_SYM(BASS_ASIO_IsStarted);
+	LOAD_SYM(BASS_ASIO_GetLatency);
+	LOAD_SYM(BASS_ASIO_GetCPU);
+	LOAD_SYM(BASS_ASIO_Monitor);
+	LOAD_SYM(BASS_ASIO_SetDSD);
+	LOAD_SYM(BASS_ASIO_Future);
+
+	LOAD_SYM(BASS_ASIO_ChannelGetInfo);
+	LOAD_SYM(BASS_ASIO_ChannelReset);
+	LOAD_SYM(BASS_ASIO_ChannelEnable);
+	LOAD_SYM(BASS_ASIO_ChannelEnableMirror);
+	LOAD_SYM(BASS_ASIO_ChannelEnableBASS);
+	LOAD_SYM(BASS_ASIO_ChannelJoin);
+	LOAD_SYM(BASS_ASIO_ChannelPause);
+	LOAD_SYM(BASS_ASIO_ChannelIsActive);
+	LOAD_SYM(BASS_ASIO_ChannelSetFormat);
+	LOAD_SYM(BASS_ASIO_ChannelGetFormat);
+	LOAD_SYM(BASS_ASIO_ChannelSetRate);
+	LOAD_SYM(BASS_ASIO_ChannelGetRate);
+	LOAD_SYM(BASS_ASIO_ChannelSetVolume);
+	LOAD_SYM(BASS_ASIO_ChannelGetVolume);
+	LOAD_SYM(BASS_ASIO_ChannelGetLevel);
+#undef LOAD_SYM
+	bassasio_loaded = true;
+	return true;
+
+unload_everything:
+	release_lib();
+	return false;
+}
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 bool obs_module_load(void)
 {
+	QMainWindow *main_window =
+		(QMainWindow *)obs_frontend_get_main_window();
+	const char *msg_string_name = "ASIOPlugin.LibError.Message";
+	if (!load_bassasio()) {
+		blog(LOG_ERROR, "Unable to load bassasio.dll.]");
+		QMessageBox::critical(
+			main_window,
+			obs_module_text("ASIOPlugin.LibError.Title"),
+			obs_module_text(msg_string_name), QMessageBox::Ok,
+			QMessageBox::NoButton);
+	} else {
+		blog(LOG_INFO, "bassasio.dll loaded.]");
+	}
+	if (!bassasio_loaded) {
+		return true;
+	}
+
 	struct obs_source_info asio_input_capture = {};
 	asio_input_capture.id = "asio_input_capture";
 	asio_input_capture.type = OBS_SOURCE_TYPE_INPUT;
@@ -1904,6 +2001,7 @@ bool obs_module_load(void)
 	asio_input_capture.get_defaults = asio_get_defaults;
 	asio_input_capture.get_name = asio_get_name;
 	asio_input_capture.get_properties = asio_get_properties;
+	asio_input_capture.icon_type = OBS_ICON_TYPE_AUDIO_INPUT;
 
 	uint8_t devices = getDeviceCount();
 	device_list.reserve(devices);
@@ -1927,5 +2025,8 @@ void obs_module_unload(void)
 		BASS_ASIO_Free();
 		//clear buffers
 		delete device_list[i];
+	}
+	if (bassasio_loaded) {
+		release_lib();
 	}
 }

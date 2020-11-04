@@ -14,7 +14,17 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(BASS_ASIO)
 
 find_package(libobs REQUIRED)
+find_package(obs-frontend-api REQUIRED)
 include(cmake/ObsPluginHelpers.cmake)
+find_qt(COMPONENTS Widgets Core)
+
+# ##################################################################################################
+# QT support                                                                                       #
+# ##################################################################################################
+set(CMAKE_PREFIX_PATH "${QTDIR}")
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
 
 # ##################################################################################################
 # set architecture                                                                                 #
@@ -37,7 +47,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${bass_asio_SOURCE_DIR}
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/asio-input.cpp)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs OBS::obs-frontend-api Qt::Core
+                                                    Qt::Widgets)
 
 if(OS_WINDOWS)
   if(ARCH EQUAL 64)
