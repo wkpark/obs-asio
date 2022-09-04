@@ -6,6 +6,7 @@ on:
       - '**.md'
     branches:
       - master
+      - obs27
     tags:
       - '*'
   pull_request:
