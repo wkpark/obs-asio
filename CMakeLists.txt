@@ -20,6 +20,7 @@ add_library(obs-asio MODULE)
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 include(cmake/ObsPluginHelpers.cmake)
+find_qt5(COMPONENTS Widgets Core)
 
 ##########################################
 # set architecture                       #
@@ -49,10 +50,6 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt5Core REQUIRED)
-# Find the QtWidgets library
-find_package(Qt5Widgets)
-
 
 include_directories(
 	SYSTEM "${LIBOBS_INCLUDE_DIR}"
@@ -74,11 +71,6 @@ set(obs-asio_SOURCES
 set(JUCE_LIB optimized ${JUCE_LIBRARY} debug ${JUCE_LIBRARY_DEBUG})
 
 qt5_add_resources(obs-asio_QRC_SOURCES ${win-asio_QRC})
-
-add_library(obs-asio MODULE
-	${win-asio_SOURCES}
-	${win-asio_QRC_SOURCES}
-)
 
 target_link_libraries(obs-asio
 	libobs
