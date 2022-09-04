@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(obs-asio)
+project(obs-asio VERSION 3.1.0)
+add_library(obs-asio MODULE)
 
 # in cmake gui set the following:
 # LIBOBS_INCLUDE_DIR = path to obs.h, obs-studio/libobs
