@@ -490,8 +490,10 @@ public:
 					  buffer_count *
 						  sizeof(device_source_audio));
 			for (int i = 0; i < buffer_count; i++) {
+				device_source_audio _source_audio =
+					device_source_audio();
 				circlebuf_push_back(
-					&audio_buffer, &device_source_audio(),
+					&audio_buffer, &_source_audio,
 					sizeof(device_source_audio));
 				//initialize # of buffers
 			}
