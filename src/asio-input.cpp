@@ -23,7 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <util/threading.h>
 #include <util/circlebuf.h>
 #include <obs-module.h>
-#include <obs-frontend-api.h>
 #include <vector>
 #include <list>
 #include <unordered_map>
@@ -32,11 +31,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sstream>
 #include <windows.h>
 #include <util/windows/WinHandle.hpp>
+#ifdef ENABLE_DYNAMIC_LOADER
+#include <obs-frontend-api.h>
 #include "bassasio-loader.h"
-#include <QMainWindow>
-#include <QMessageBox>
 
 bool bassasio_loaded = false;
+#else
+#include <bassasio.h>
+#endif
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("win-asio", "en-US")
 
@@ -1897,6 +1900,8 @@ obs_properties_t *asio_get_properties(void *unused)
 
 	return props;
 }
+
+#ifdef ENABLE_DYNAMIC_LOADER
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4706)
@@ -1974,8 +1979,14 @@ unload_everything:
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+#include <QMainWindow>
+#include <QMessageBox>
+
+#endif
+
 bool obs_module_load(void)
 {
+#ifdef ENABLE_DYNAMIC_LOADER
 	QMainWindow *main_window =
 		(QMainWindow *)obs_frontend_get_main_window();
 	const char *msg_string_name = "ASIOPlugin.LibError.Message";
@@ -1992,6 +2003,7 @@ bool obs_module_load(void)
 	if (!bassasio_loaded) {
 		return true;
 	}
+#endif
 
 	struct obs_source_info asio_input_capture = {};
 	asio_input_capture.id = "asio_input_capture";
@@ -2028,7 +2040,9 @@ void obs_module_unload(void)
 		//clear buffers
 		delete device_list[i];
 	}
+#ifdef ENABLE_DYNAMIC_LOADER
 	if (bassasio_loaded) {
 		release_lib();
 	}
+#endif
 }

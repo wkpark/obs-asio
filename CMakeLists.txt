@@ -5,6 +5,8 @@ add_library(obs-asio MODULE)
 
 set(PLUGIN_AUTHOR "Andersama & pkv")
 
+option(ENABLE_DYNAMIC_LOADER "Load the bassasio.dll dynamically" ON)
+
 include(FetchContent)
 FetchContent_Declare(
   BASS_ASIO
@@ -14,17 +16,22 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(BASS_ASIO)
 
 find_package(libobs REQUIRED)
-find_package(obs-frontend-api REQUIRED)
+if(ENABLE_DYNAMIC_LOADER)
+  find_package(obs-frontend-api REQUIRED)
+endif()
 include(cmake/ObsPluginHelpers.cmake)
-find_qt(COMPONENTS Widgets Core)
 
-# ##################################################################################################
-# QT support                                                                                       #
-# ##################################################################################################
-set(CMAKE_PREFIX_PATH "${QTDIR}")
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
+if(ENABLE_DYNAMIC_LOADER)
+  find_qt(COMPONENTS Widgets Core)
+
+  # ################################################################################################
+  # QT support                                                                                     #
+  # ################################################################################################
+  set(CMAKE_PREFIX_PATH "${QTDIR}")
+  set(CMAKE_INCLUDE_CURRENT_DIR ON)
+  set(CMAKE_AUTOMOC ON)
+  set(CMAKE_AUTOUIC ON)
+endif()
 
 # ##################################################################################################
 # set architecture                                                                                 #
@@ -47,8 +54,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${bass_asio_SOURCE_DIR}
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/asio-input.cpp)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs OBS::obs-frontend-api Qt::Core
-                                                    Qt::Widgets)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
+
+if(ENABLE_DYNAMIC_LOADER)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::obs-frontend-api Qt::Core Qt::Widgets)
+endif()
 
 if(OS_WINDOWS)
   if(ARCH EQUAL 64)
