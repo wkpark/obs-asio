@@ -1,105 +1,71 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16...3.21)
 
-project(obs-asio)
+project(obs-asio VERSION 3.1.0)
+add_library(obs-asio MODULE)
 
-# in cmake gui set the following:
-# BASS_ASIO_LIB == path of bassasio.lib
-# BASS_ASIO_INCLUDE_DIR == path of bassasio.h
-# put also bassasio.dll in obs-plugins/bin folder
-# be careful there are two versions of the lib and dll (x86 and x64)
+set(PLUGIN_AUTHOR "Andersama & pkv")
 
-##########################################
-# find libobs                            #
-##########################################
-include(external/FindLibObs.cmake)
-find_package(LibObs REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+  BASS_ASIO
+  URL https://www.un4seen.com/files/bassasio14.zip
+  URL_HASH MD5=825182f314d1b925f1cc42647b4ec117)
 
-##########################################
-# set architecture                       #
-##########################################
+FetchContent_MakeAvailable(BASS_ASIO)
+
+find_package(libobs REQUIRED)
+include(cmake/ObsPluginHelpers.cmake)
+
+# ##################################################################################################
+# set architecture                                                                                 #
+# ##################################################################################################
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	set(ARCH 64)
+  set(ARCH 64)
 else()
-	set(ARCH 32)
+  set(ARCH 32)
 endif()
 
 if(ARCH EQUAL 64)
-	set(OBS_ARCH_NAME "64bit")
-	set(OBS_BUILDDIR_ARCH "build64")
+  set(OBS_ARCH_NAME "64bit")
+  set(OBS_BUILDDIR_ARCH "build64")
 else()
-	set(OBS_ARCH_NAME "32bit")
-	set(OBS_BUILDDIR_ARCH "build32")
+  set(OBS_ARCH_NAME "32bit")
+  set(OBS_BUILDDIR_ARCH "build32")
 endif()
 
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${bass_asio_SOURCE_DIR}/c)
 
-##########################################
-# QT support                             #
-##########################################
-# Find includes in corresponding build directories
-#set(CMAKE_INCLUDE_CURRENT_DIR ON)
-# Instruct CMake to run moc automatically when needed.
-#set(CMAKE_AUTOMOC ON)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/asio-input.cpp)
 
-# Find the QtWidgets library
-#find_package(Qt5Widgets)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
 
+if(OS_WINDOWS)
+  if(ARCH EQUAL 64)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${bass_asio_SOURCE_DIR}/c/x64/bassasio.lib)
+  else()
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${bass_asio_SOURCE_DIR}/c/bassasio.lib)
+  endif()
+endif()
 
-include_directories(
-#	SYSTEM "${CMAKE_SOURCE_DIR}/libobs"
-	${BASS_ASIO_INCLUDE_DIR}
-)
-set(obs-asio-sdk_HEADERS
-	)
+if(MSVC)
+  target_include_directories(${CMAKE_PROJECT_NAME}
+                             PRIVATE ${CMAKE_SOURCE_DIR}/../obs-studio/deps/w32-pthreads/)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::w32-pthreads)
+endif()
 
-set(obs-asio_HEADERS
-	)
+# --- Windows-specific build settings and tasks ---
+if(OS_WINDOWS)
+  configure_file(cmake/bundle/windows/installer-Windows.iss.in
+                 ${CMAKE_BINARY_DIR}/installer-Windows.generated.iss)
 
-set(obs-asio_SOURCES
-	src/asio-input.cpp
-)
+  configure_file(cmake/bundle/windows/resource.rc.in ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.rc)
+  target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.rc)
 
-add_library(obs-asio MODULE
-	${obs-asio_SOURCES}
-	${obs-asio_HEADERS}
-	${obs-asio-sdk_HEADERS}
-)
-target_link_libraries(obs-asio
-	libobs
-	${BASS_ASIO_LIB}
-)
+  if(MSVC)
+    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /WX-)
+  endif()
+  # --- End of section ---
+endif()
 
-#install_obs_plugin_with_data(win-asio data) ==> internal plugin install
-#install_external_plugin_with_data(obs-asio data)
-
-set(RELEASE_DIR "${PROJECT_SOURCE_DIR}/release")
-add_custom_command(TARGET obs-asio POST_BUILD
-	COMMAND if $<CONFIG:Release>==1 (
-		"${CMAKE_COMMAND}" -E make_directory
-			"${RELEASE_DIR}/data/obs-plugins/obs-asio"
-			"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
-
-	COMMAND if $<CONFIG:Release>==1 (
-		"${CMAKE_COMMAND}" -E copy_directory
-			"${PROJECT_SOURCE_DIR}/src/data"
-			"${RELEASE_DIR}/data/obs-plugins/obs-asio")
-
-	COMMAND if $<CONFIG:Release>==1 (
-		"${CMAKE_COMMAND}" -E copy
-			"$<TARGET_FILE:obs-asio>"
-			"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
-			
-#Copy to obs-studio dev environment for immediate testing
-	COMMAND if $<CONFIG:Debug>==1 (
-		"${CMAKE_COMMAND}" -E copy
-			"$<TARGET_FILE:obs-asio>"
-			"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/obs-plugins/${OBS_ARCH_NAME}")
-
-	COMMAND if $<CONFIG:Debug>==1 (
-		"${CMAKE_COMMAND}" -E make_directory
-			"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/data/obs-plugins/obs-asio")
-
-	COMMAND if $<CONFIG:Debug>==1 (
-		"${CMAKE_COMMAND}" -E copy_directory
-			"${PROJECT_SOURCE_DIR}/data"
-			"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/data/obs-plugins/obs-asio")
-	)
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES FOLDER "plugins")
+setup_plugin_target(${CMAKE_PROJECT_NAME})
